@@ -3,17 +3,7 @@
 global target_proc_begin_ts = 0
 global target_proc_end_ts = 0
 
-probe scheduler.cpu_off
-{
-  if (task_execname(task_current()) == "idle_test") {
-    target_proc_end_ts = gettimeofday_ns();
-    printf("%5d %5d TEST_OFF\n",  gettimeofday_ns(), task_cpu(task_current()));
-  }
-
-  if (idle) {
-    printf("%5d %5d IDLE_OFF\n",  gettimeofday_ns(), task_cpu(task_current()));
-  }
-}
+global idle_on;
 
 probe scheduler.cpu_on
 {
@@ -27,12 +17,32 @@ probe scheduler.cpu_on
   }
 
   if (idle) {
-    printf("%5d %5d IDLE_ON\n",  gettimeofday_ns(), task_cpu(task_current()));
+    cpu_id = task_cpu(task_current());
+    idle_on[cpu_id] = gettimeofday_ns();
+  }
+}
+
+probe scheduler.cpu_off
+{
+  if (task_execname(task_current()) == "idle_test") {
+    target_proc_end_ts = gettimeofday_ns();
+    printf("%5d %5d TEST_OFF\n",  gettimeofday_ns(), task_cpu(task_current()));
+  }
+
+  if (idle) {
+    ts_off = gettimeofday_ns();
+    cpu_id = task_cpu(task_current());
+    ts_on = idle_on[cpu_id];
+    if (ts_on > 0) {
+      printf("%5d %5d IDLE_ON\n%5d %5d IDLE_OFF\n",  ts_on, cpu_id, ts_off, cpu_id);
+    }
   }
 }
 
 probe end
 {
+  foreach (cpu_id in idle_on)
+    printf("%5d %5d IDLE_ON\n",  idle_on[cpu_id], cpu_id);
   printf("begin_ts %d\n", target_proc_begin_ts);
   printf("end_ts   %d\n", target_proc_end_ts);
   printf("duration_ns %d\n", target_proc_end_ts - target_proc_begin_ts);

@@ -1,0 +1,39 @@
+#! /usr/bin/env stap
+
+global target_proc_begin_ts = 0
+global target_proc_end_ts = 0
+
+probe scheduler.cpu_off
+{
+  if (task_execname(task_current()) == "idle_test") {
+    target_proc_end_ts = gettimeofday_ns();
+    printf("%5d %5d TEST_OFF\n",  gettimeofday_ns(), task_cpu(task_current()));
+  }
+
+  if (idle) {
+    printf("%5d %5d IDLE_OFF\n",  gettimeofday_ns(), task_cpu(task_current()));
+  }
+}
+
+probe scheduler.cpu_on
+{
+  if (task_execname(task_current()) == "idle_test") {
+    printf("%5d %5d TEST_ON\n",  gettimeofday_ns(), task_cpu(task_current()));
+  }
+
+  if (target_proc_begin_ts == 0 && task_execname(task_current()) == "idle_test") {
+    target_proc_begin_ts = gettimeofday_ns();
+    printf("%5d %5d TEST_START\n",  gettimeofday_ns(), task_cpu(task_prev));
+  }
+
+  if (idle) {
+    printf("%5d %5d IDLE_ON\n",  gettimeofday_ns(), task_cpu(task_current()));
+  }
+}
+
+probe end
+{
+  printf("begin_ts %d\n", target_proc_begin_ts);
+  printf("end_ts   %d\n", target_proc_end_ts);
+  printf("duration_ns %d\n", target_proc_end_ts - target_proc_begin_ts);
+}
